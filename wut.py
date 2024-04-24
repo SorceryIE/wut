@@ -122,9 +122,19 @@ def test_compression_methods(data, prefix):
 		analyse(zlib.decompressobj().decompress(delfate_prefix + data),f"{prefix}\t")
 
 def db64(data):
+	data = data.replace('\n','').replace('\r','')
 	if '-' in data or '_' in data:
 		return base64.urlsafe_b64encode(data)
 	return base64.b64decode(data)
+
+def is_pkcs7_padded(data):
+	padding = data[-data[-1]:]
+	return all(padding[b] == len(padding) for b in range(0, len(padding)))
+
+def is_zero_padded(data):
+	if len(data)%8 != 0:
+		return False
+	return data.endswith(b'\x00')
 
 def analyse(data,prefix=''):
 	# Entropy
@@ -132,34 +142,40 @@ def analyse(data,prefix=''):
 	print(f"{prefix}Shannon Entropy: {ent}")
 	# Mime detection with magic
 	magic_res = magic.from_buffer(data)
-	print(f"{prefix}Magic Mime Detect: {magic_res}")
+	if magic_res != 'data': #no point printing that out!
+		print(f"{prefix}Magic Mime Detect: {magic_res}")
 	# Test compression methods
 	test_compression_methods(data,prefix)
+	# Check padding
+	if is_pkcs7_padded(data):
+		print(f"PCKS7 Padding detected, data is probably encrypted")
+	if is_zero_padded(data):
+		print(f"Zero Padding detected (weak confidence), data may be encrypted")
 	# Encoding Detection
 	encoding_guess = chardet.detect(data)
-	print(f"{prefix}Possible encoding: {encoding_guess['encoding']} ({encoding_guess['confidence']*100:.2f}% confidence)")
-	try:
-		decoded = data.decode(encoding_guess['encoding'])
-	except UnicodeDecodeError:
-		print(f"{prefix}Failed to decode data as {encoding_guess['encoding']}")
-		exit()
-	# Show character list
-	character_list = ''.join(sorted(set(decoded)))
-	print(f"{prefix}Characters used: {character_list.encode('unicode_escape').decode('utf-8')}")
-	# Try base64
-	if is_b64(decoded):
-		print(f"{prefix}Base64 detected")
-		print(f"{prefix}Running analyse function with data b64 decoded")
-		b64_decoded = db64(decoded)
-		analyse(b64_decoded,f"{prefix}\t")
-# add check for PKCS padding at the end
+	if encoding_guess['encoding'] != None:
+		print(f"{prefix}Possible encoding: {encoding_guess['encoding']} ({encoding_guess['confidence']*100:.2f}% confidence)")
+		try:
+			decoded = data.decode(encoding_guess['encoding'])
+		except UnicodeDecodeError:
+			print(f"{prefix}Failed to decode data as {encoding_guess['encoding']}")
+			return
+		# Show character list
+		character_list = ''.join(sorted(set(decoded)))
+		print(f"{prefix}Characters used: {character_list.encode('unicode_escape').decode('utf-8')}")
+		# Try base64
+		if is_b64(decoded):
+			print(f"{prefix}Base64 detected")
+			print(f"{prefix}Running analyse function with data b64 decoded")
+			b64_decoded = db64(decoded)
+			analyse(b64_decoded,f"{prefix}\t")
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="wut - data identifier")
 	parser.add_argument("input", help="input data or filename")
 	args = parser.parse_args()
 	input_data = args.input
-	if os.path.isfile(args.input):
+	if os.path.isfile(args.input) or os.path.islink(args.input):
 		with open(args.input, mode='rb') as f:
 			input_data = f.read()
 	else:
