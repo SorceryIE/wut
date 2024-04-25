@@ -124,7 +124,7 @@ def test_compression_methods(data, prefix):
 def db64(data):
 	data = data.replace('\n','').replace('\r','')
 	if '-' in data or '_' in data:
-		return base64.urlsafe_b64encode(data)
+		return base64.urlsafe_b64decode(data)
 	return base64.b64decode(data)
 
 def is_pkcs7_padded(data):
