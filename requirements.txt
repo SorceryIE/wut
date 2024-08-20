@@ -1,3 +1,12 @@
 chardet
 python-magic
 brotli
+#zstd - not using this as it doesnt support streaming zstd compression
+zstandard
+lz4
+python-snappy
+python-lzo
+pyquicklz
+pyliblzfse
+ncompress
+lzallright

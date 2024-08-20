@@ -10,6 +10,16 @@ import bz2
 import zlib
 import lzma
 import brotli
+import zstandard as zstd
+import lz4.frame
+import lz4.block
+import snappy
+import io
+import lzo
+import quicklz
+import liblzfse
+import ncompress
+import lzallright
 
 def shannon_entropy(data):
 	# 256 different possible values
@@ -94,6 +104,132 @@ def is_deflate(data):
             pass
     return False
 
+def is_lz4(data):
+	try:
+		lz4.frame.decompress(data)
+		return True
+	except (RuntimeError):
+		try:
+			lz4.block.decompress(data, uncompressed_size=1000)
+			return True
+		except:
+			return False
+
+def unlz4(data):
+	try:
+		return lz4.frame.decompress(data)
+	except (RuntimeError):
+		return lz4.block.decompress(data, uncompressed_size=1000)
+
+def is_zstd(data):
+	try:
+		zstd.decompress(data)
+		return True
+	except (zstd.ZstdError):
+		# try with a stream
+		try:
+			zstd_dcmp = zstd.ZstdDecompressor()
+			stream_reader = zstd_dcmp.stream_reader(data)
+			stream_reader.read()
+			stream_reader.close()
+			return True
+		except (zstd.ZstdError):
+			return False
+
+def unzstd(data):
+	try:
+		return zstd.decompress(data)
+	except (zstd.ZstdError):
+		zstd_dcmp = zstd.ZstdDecompressor()
+		stream_reader = zstd_dcmp.stream_reader(data)
+		decompressed = stream_reader.read()
+		stream_reader.close()
+		return decompressed
+
+def is_snappy(data):
+	try:
+		snappy.uncompress(data)
+		return True
+	except (snappy.snappy.UncompressError):
+		try:
+			x = io.BytesIO()
+			snappy.stream_decompress(io.BytesIO(data), x)
+			return len(x.getvalue())>0
+		except (snappy.snappy.UncompressError, OSError):
+			return False
+
+def unsnappy(data):
+	try:
+		return snappy.uncompress(data)
+	except (snappy.snappy.UncompressError):
+		x = io.BytesIO()
+		snappy.stream_decompress(io.BytesIO(data), x)
+		return x.getvalue()
+
+def is_lzo(data):
+	try:
+		lzallright.LZOCompressor().decompress(data)
+		return True
+	except lzallright._lzallright.LZOError:
+		pass
+	algos = ['LZO1', 'LZO1A', 'LZO1B', 'LZO1C', 'LZO1F', 'LZO1X', 'LZO1Y', 'LZO1Z', 'LZO2A']
+	for algo in algos:
+		try:
+			lzo.decompress(data,True,algorithm=algo)
+			return True
+		except (lzo.error):
+			pass
+	# trying without headers
+	for algo in algos:
+		try:
+			# Note: this can lead to segfault, underlying library has a double free
+			lzo.decompress(data,False,5000,algorithm=algo)
+			return True
+		except (lzo.error):
+			pass
+	return False
+
+def unlzo(data):
+	try:
+		return lzallright.LZOCompressor().decompress(data)
+	except lzallright._lzallright.LZOError:
+		pass
+	algos = ['LZO1', 'LZO1A', 'LZO1B', 'LZO1C', 'LZO1F', 'LZO1X', 'LZO1Y', 'LZO1Z', 'LZO2A']
+	for algo in algos:
+		try:
+			return lzo.decompress(data,True,algorithm=algo)
+		except (lzo.error):
+			pass
+	# trying without headers
+	for algo in algos:
+		try:
+			return lzo.decompress(data,False,5000,algorithm=algo)
+		except (lzo.error):
+			pass
+
+def is_quicklz(data):
+	# Note: This doesnt work on my sample file from the CachedQuickLz .NET package
+	try:
+		quicklz.decompress(data)
+		return True
+	except ValueError:
+		return False
+
+def is_lzfse(data):
+	# This also detects LZVN
+	try:
+		liblzfse.decompress(data)
+		return True
+	except liblzfse.error:
+		return False
+
+def is_lzw(data):
+	try:
+		ncompress.decompress(data)
+		return True
+	except ValueError:
+		return False
+
 def test_compression_methods(data, prefix):
 	#gzip
 	if is_gzip(data):
@@ -120,6 +256,34 @@ def test_compression_methods(data, prefix):
 	if delfate_prefix:
 		print(f"{prefix}Deflate detected")
 		analyse(zlib.decompressobj().decompress(delfate_prefix + data),f"{prefix}\t")
+	#zstd
+	if is_zstd(data):
+		print(f"{prefix}Zstd detected")
+		analyse(unzstd(data),f"{prefix}\t")
+	#lz4
+	if is_lz4(data):
+		print(f"{prefix}Lz4 detected")
+		analyse(unlz4(data),f"{prefix}\t")
+	#snappy
+	if is_snappy(data):
+		print(f"{prefix}Snappy detected")
+		analyse(unsnappy(data),f"{prefix}\t")
+	#quicklz
+	if is_quicklz(data):
+		print(f"{prefix}QuickLZ detected")
+		analyse(quicklz.decompress(data),f"{prefix}\t")
+	#lzfse
+	if is_lzfse(data):
+		print(f"{prefix}LZFSE/LZVN detected")
+		analyse(liblzfse.decompress(data),f"{prefix}\t")
+	#lzw
+	if is_lzw(data):
+		print(f"{prefix}LZW detected")
+		analyse(ncompress.decompress(data),f"{prefix}\t")
+	#lzo
+	if is_lzo(data):
+		print(f"{prefix}LZO detected")
+		analyse(unlzo(data),f"{prefix}\t")
 
 def db64(data):
 	data = data.replace('\n','').replace('\r','')
@@ -137,6 +301,9 @@ def is_zero_padded(data):
 	return data.endswith(b'\x00')
 
 def analyse(data,prefix=''):
+	if len(data) == 0:
+		print(f"{prefix}zero length reached")
+		return
 	# Entropy
 	ent = shannon_entropy(data)
 	print(f"{prefix}Shannon Entropy: {ent}")
@@ -148,9 +315,9 @@ def analyse(data,prefix=''):
 	test_compression_methods(data,prefix)
 	# Check padding
 	if is_pkcs7_padded(data):
-		print(f"PCKS7 Padding detected, data is probably encrypted")
+		print(f"{prefix}PCKS7 Padding detected, data is probably encrypted")
 	if is_zero_padded(data):
-		print(f"Zero Padding detected (weak confidence), data may be encrypted")
+		print(f"{prefix}Zero Padding detected (weak confidence), data may be encrypted")
 	# Encoding Detection
 	encoding_guess = chardet.detect(data)
 	if encoding_guess['encoding'] != None:
@@ -170,7 +337,7 @@ def analyse(data,prefix=''):
 			b64_decoded = db64(decoded)
 			analyse(b64_decoded,f"{prefix}\t")
 
-if __name__ == "__main__":
+def main():
 	parser = argparse.ArgumentParser(description="wut - data identifier")
 	parser.add_argument("input", help="input data or filename")
 	args = parser.parse_args()
@@ -181,3 +348,6 @@ if __name__ == "__main__":
 	else:
 		input_data = bytes(input_data, 'utf-8')
 	analyse(input_data)
+
+if __name__ == "__main__":
+	main()

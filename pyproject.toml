@@ -1,0 +1,17 @@
+[project]
+name = "wut"
+version = "1.0.0"
+description = "Attempts to identify random string of data"
+dependencies = ["chardet", "python-magic", "brotli",
+"zstandard", "lz4", "python-snappy", "python-lzo",
+"pyquicklz", "pyliblzfse", "ncompress", "lzallright"]
+
+[project.urls]
+Repository = "https://github.com/SorceryIE/wut.git"
+Issues = "https://github.com/SorceryIE/wut/issues"
+
+[project.scripts]
+wut = "wut:main"
+
+[tool.setuptools]
+py-modules = []
