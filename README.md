@@ -1,11 +1,20 @@
 # wut
 Wut is a cli tool designed to try figure out what an arbitrary string of data is by trying different decoding and decompression methods on it and some basic analysis.
+It works recursively as well so no need to decode the base64 etc before passing the data to wut.
 
 ## Installation
 ```sh
 git clone git@github.com:SorceryIE/wut.git
 python -m pip install .
 ```
+
+## Usage
+```sh
+echo "ABCDEF" | wut
+wut "ABCDEF"
+wut file.bin
+```
+
 ## Supported Compressions
 - gzip
 - zlib

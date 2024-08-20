@@ -20,6 +20,7 @@ import quicklz
 import liblzfse
 import ncompress
 import lzallright
+import sys
 
 def shannon_entropy(data):
 	# 256 different possible values
@@ -78,8 +79,9 @@ def is_bz2(data):
 
 def is_lzma(data):
 	try:
-		lzma.decompress(data)
-		return True
+		x = lzma.decompress(data)
+		if len(x) > 0:
+			return True
 	except (lzma.LZMAError):
 		pass
 	return False
@@ -93,16 +95,29 @@ def is_brotli(data):
 	return False
 
 def is_deflate(data):
-    # False positive avoidance
-    if len(data)<10:
-        return False
-    for val in [b'x\x01', b'x\x9c', b'x\xda']:
-        try:
-            zlib.decompressobj().decompress(val + data)
-            return val
-        except (zlib.error):
-            pass
-    return False
+	# False positive avoidance
+	if len(data)<10:
+		return False
+	for val in [b'x\x01', b'x\x9c', b'x\xda']:
+		try:
+			zlib.decompressobj().decompress(val + data)
+			return val
+		except (zlib.error):
+			pass
+	return False
+
+def is_deflatestream(data):
+	# False positive avoidance
+	if len(data)<10:
+		return False
+	#deflate streams end with a 4 byte adler32 checksum
+	for val in [b'x\x01', b'x\x9c', b'x\xda']:
+		try:
+			zlib.decompressobj().decompress(val + data[2:-4])
+			return val
+		except (zlib.error):
+			pass
+	return False
 
 def is_lz4(data):
 	try:
@@ -166,6 +181,7 @@ def unsnappy(data):
 		snappy.stream_decompress(io.BytesIO(data), x)
 		return x.getvalue()
 
+lzo_shannon_entropy_threshold = 0.05
 def is_lzo(data):
 	try:
 		lzallright.LZOCompressor().decompress(data)
@@ -174,17 +190,21 @@ def is_lzo(data):
 		pass
 	algos = ['LZO1', 'LZO1A', 'LZO1B', 'LZO1C', 'LZO1F', 'LZO1X', 'LZO1Y', 'LZO1Z', 'LZO2A']
 	for algo in algos:
+		print(algo)
 		try:
-			lzo.decompress(data,True,algorithm=algo)
-			return True
+			x = lzo.decompress(data,True,algorithm=algo)
+			if shannon_entropy(x) > lzo_shannon_entropy_threshold:
+				return True
 		except (lzo.error):
 			pass
 	# trying without headers
 	for algo in algos:
+		print(algo)
 		try:
 			# Note: this can lead to segfault, underlying library has a double free
-			lzo.decompress(data,False,5000,algorithm=algo)
-			return True
+			x = lzo.decompress(data,False,5000,algorithm=algo)
+			if shannon_entropy(x) > lzo_shannon_entropy_threshold:
+				return True
 		except (lzo.error):
 			pass
 	return False
@@ -197,13 +217,17 @@ def unlzo(data):
 	algos = ['LZO1', 'LZO1A', 'LZO1B', 'LZO1C', 'LZO1F', 'LZO1X', 'LZO1Y', 'LZO1Z', 'LZO2A']
 	for algo in algos:
 		try:
-			return lzo.decompress(data,True,algorithm=algo)
+			x = lzo.decompress(data,True,algorithm=algo)
+			if shannon_entropy(x) > lzo_shannon_entropy_threshold:
+				return x
 		except (lzo.error):
 			pass
 	# trying without headers
 	for algo in algos:
 		try:
-			return lzo.decompress(data,False,5000,algorithm=algo)
+			x = lzo.decompress(data,False,5000,algorithm=algo)
+			if shannon_entropy(x) > lzo_shannon_entropy_threshold:
+				return x
 		except (lzo.error):
 			pass
 
@@ -243,6 +267,18 @@ def test_compression_methods(data, prefix):
 	if is_zlib(data):
 		print(f"{prefix}Zlib detected")
 		analyse(zlib.decompress(data),f"{prefix}\t")
+	else:
+		#deflate
+		delfate_prefix = is_deflate(data)
+		if delfate_prefix:
+			print(f"{prefix}Deflate detected")
+			analyse(zlib.decompressobj().decompress(delfate_prefix + data),f"{prefix}\t")
+		else:
+			#deflatestream
+			delfate_prefix = is_deflatestream(data)
+			if delfate_prefix:
+				print(f"{prefix}DeflateStream detected")
+				analyse(zlib.decompressobj().decompress(delfate_prefix + data[2:-4]),f"{prefix}\t")
 	#lzma
 	if is_lzma(data):
 		print(f"{prefix}LZMA detected")
@@ -251,11 +287,7 @@ def test_compression_methods(data, prefix):
 	if is_brotli(data):
 		print(f"{prefix}Brotli detected")
 		analyse(brotli.decompress(data),f"{prefix}\t")
-	#deflate
-	delfate_prefix = is_deflate(data)
-	if delfate_prefix:
-		print(f"{prefix}Deflate detected")
-		analyse(zlib.decompressobj().decompress(delfate_prefix + data),f"{prefix}\t")
+
 	#zstd
 	if is_zstd(data):
 		print(f"{prefix}Zstd detected")
@@ -339,9 +371,12 @@ def analyse(data,prefix=''):
 
 def main():
 	parser = argparse.ArgumentParser(description="wut - data identifier")
-	parser.add_argument("input", help="input data or filename")
+	parser.add_argument("input", nargs='?', help="input data or filename", default="/dev/stdin")
 	args = parser.parse_args()
 	input_data = args.input
+	if sys.stdin.isatty() and args.input == '/dev/stdin':
+		parser.print_help(sys.stderr)
+		exit()
 	if os.path.isfile(args.input) or os.path.islink(args.input):
 		with open(args.input, mode='rb') as f:
 			input_data = f.read()
