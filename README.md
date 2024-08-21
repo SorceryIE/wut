@@ -22,6 +22,7 @@ wut file.bin
 - lzma
 - brotli
 - deflate
+- deflate stream
 - zstd/zstandard
 - lz4
 - lzw

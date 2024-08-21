@@ -190,7 +190,6 @@ def is_lzo(data):
 		pass
 	algos = ['LZO1', 'LZO1A', 'LZO1B', 'LZO1C', 'LZO1F', 'LZO1X', 'LZO1Y', 'LZO1Z', 'LZO2A']
 	for algo in algos:
-		print(algo)
 		try:
 			x = lzo.decompress(data,True,algorithm=algo)
 			if shannon_entropy(x) > lzo_shannon_entropy_threshold:
@@ -199,7 +198,6 @@ def is_lzo(data):
 			pass
 	# trying without headers
 	for algo in algos:
-		print(algo)
 		try:
 			# Note: this can lead to segfault, underlying library has a double free
 			x = lzo.decompress(data,False,5000,algorithm=algo)
@@ -331,6 +329,32 @@ def is_zero_padded(data):
 	if len(data)%8 != 0:
 		return False
 	return data.endswith(b'\x00')
+
+def get_compressions(data):
+	"""Returns list of compression methods detected (no recursion)"""
+	compressions = []
+	funcs = {
+		'gzip': is_gzip,
+		'bzip2': is_bz2,
+		'zlib': is_zlib,
+		'deflate': is_deflate,
+		'deflatestream': is_deflatestream,
+		'lzma': is_lzma,
+		'brotli': is_brotli,
+		'zstd': is_zstd,
+		'lz4': is_lz4,
+		'snappy': is_snappy,
+		'quicklz': is_quicklz,
+		'lzfse': is_lzfse,
+		'lzw': is_lzw,
+		'lzo': is_lzo
+	}
+	if is_b64(data):
+		data = base64.b64decode(data)
+	for key,func in funcs.items():
+		if func(data):
+			compressions.append(key)
+	return compressions
 
 def analyse(data,prefix=''):
 	if len(data) == 0:

@@ -13,5 +13,5 @@ Issues = "https://github.com/SorceryIE/wut/issues"
 [project.scripts]
 wut = "wut:main"
 
-[tool.setuptools]
-py-modules = []
+[tool.setuptools.packages.find]
+exclude = ["work"]  # exclude packages matching these glob patterns (empty by default)
