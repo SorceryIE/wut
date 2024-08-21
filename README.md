@@ -5,6 +5,7 @@ It works recursively as well so no need to decode the base64 etc before passing 
 ## Installation
 ```sh
 git clone git@github.com:SorceryIE/wut.git
+cd wut
 python -m pip install .
 ```
 
