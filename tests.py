@@ -1,6 +1,6 @@
 import os
 import lzo
-import wut
+import wut.wut as wut
 
 def test_lzo_with_metadata():
     corpus = {}
@@ -11,7 +11,7 @@ def test_lzo_with_metadata():
 
     for name,val in corpus.items():
         print(name)
-        assert wut.is_lzo(val) is True
+        assert wut.is_lzo(val) is not False
 
 def test_lzo_without_metadata():
     corpus = {}
@@ -22,4 +22,4 @@ def test_lzo_without_metadata():
 
     for name,val in corpus.items():
         print(name)
-        assert wut.is_lzo(val) is True
+        assert wut.is_lzo(val) is not False

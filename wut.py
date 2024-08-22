@@ -182,7 +182,7 @@ def unsnappy(data):
 		return x.getvalue()
 
 lzo_shannon_entropy_threshold = 0.05
-def is_lzo(data):
+def is_lzo(data,safe=False):
 	try:
 		lzallright.LZOCompressor().decompress(data)
 		return True
@@ -193,16 +193,20 @@ def is_lzo(data):
 		try:
 			x = lzo.decompress(data,True,algorithm=algo)
 			if shannon_entropy(x) > lzo_shannon_entropy_threshold:
-				return True
+				return algo
 		except (lzo.error):
 			pass
 	# trying without headers
+	# "safe" skips this check until this github issue is fixed
+	# https://github.com/jd-boyd/python-lzo/issues/87
+	if safe:
+		return False
 	for algo in algos:
 		try:
 			# Note: this can lead to segfault, underlying library has a double free
 			x = lzo.decompress(data,False,5000,algorithm=algo)
 			if shannon_entropy(x) > lzo_shannon_entropy_threshold:
-				return True
+				return algo
 		except (lzo.error):
 			pass
 	return False
@@ -311,8 +315,9 @@ def test_compression_methods(data, prefix):
 		print(f"{prefix}LZW detected")
 		analyse(ncompress.decompress(data),f"{prefix}\t")
 	#lzo
-	if is_lzo(data):
-		print(f"{prefix}LZO detected")
+	lzo_check = is_lzo(data)
+	if lzo_check:
+		print(f"{prefix}LZO detected ({lzo_check})")
 		analyse(unlzo(data),f"{prefix}\t")
 
 def db64(data):
@@ -351,9 +356,17 @@ def get_compressions(data):
 	}
 	if is_b64(data):
 		data = base64.b64decode(data)
+	elif isinstance(x,str):
+		data = bytes(x)
 	for key,func in funcs.items():
-		if func(data):
-			compressions.append(key)
+		# this is to skip crash-prone checks as I dont want scripts calling this get_compressions function to crash
+		# but crashes when running wut directly are more acceptable.
+		if key == 'lzo':
+			if func(data, safe=True):
+				compressions.append(key)
+		else:
+			if func(data):
+				compressions.append(key)
 	return compressions
 
 def analyse(data,prefix=''):
