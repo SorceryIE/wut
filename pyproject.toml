@@ -13,5 +13,9 @@ Issues = "https://github.com/SorceryIE/wut/issues"
 [project.scripts]
 wut = "wut:main"
 
-[tool.setuptools.packages.find]
-exclude = ["work"]  # exclude packages matching these glob patterns (empty by default)
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "wut"
