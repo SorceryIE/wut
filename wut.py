@@ -356,8 +356,8 @@ def get_compressions(data):
 	}
 	if is_b64(data):
 		data = base64.b64decode(data)
-	elif isinstance(x,str):
-		data = bytes(x)
+	elif isinstance(data,str):
+		data = bytes(data)
 	for key,func in funcs.items():
 		# this is to skip crash-prone checks as I dont want scripts calling this get_compressions function to crash
 		# but crashes when running wut directly are more acceptable.
