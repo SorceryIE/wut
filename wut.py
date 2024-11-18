@@ -362,8 +362,9 @@ def get_compressions(data):
 		# this is to skip crash-prone checks as I dont want scripts calling this get_compressions function to crash
 		# but crashes when running wut directly are more acceptable.
 		if key == 'lzo':
-			if func(data, safe=True):
-				compressions.append(key)
+			continue
+			#if func(data, safe=True):
+			#	compressions.append(key)
 		else:
 			if func(data):
 				compressions.append(key)
